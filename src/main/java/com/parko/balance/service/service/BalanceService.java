@@ -1,5 +1,6 @@
 package com.parko.balance.service.service;
 
+import com.parko.balance.service.dto.request.ChargeRequest;
 import com.parko.balance.service.dto.request.TopUpRequest;
 import com.parko.balance.service.event.TopUpMessage;
 import com.parko.balance.service.publisher.TopUpPublisher;
@@ -22,5 +23,9 @@ public class BalanceService {
         TopUpMessage message = new TopUpMessage(operationId, request.userId(), request.amount(), Instant.now());
         topUpPublisher.publish(message);
         return operationId;
+    }
+
+    public UUID charge(ChargeRequest request) {
+        return UUID.randomUUID();
     }
 }

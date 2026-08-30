@@ -1,5 +1,6 @@
 package com.parko.balance.service.controller;
 
+import com.parko.balance.service.dto.request.ChargeRequest;
 import com.parko.balance.service.dto.request.TopUpRequest;
 import com.parko.balance.service.service.BalanceService;
 import jakarta.validation.Valid;
@@ -28,4 +29,11 @@ public class BalanceController {
         UUID operationId = balanceService.topUp(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(operationId);
     }
+
+    @PostMapping("/charge")
+    public ResponseEntity<UUID> charge(@Valid @RequestBody ChargeRequest request, Authentication authentication) {
+        UUID operationId = balanceService.charge(request);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(operationId);
+    }
+
 }
