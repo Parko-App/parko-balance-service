@@ -36,7 +36,7 @@ class BalanceControllerTest {
     void topUp_validRequest_returnsAccepted() throws Exception {
         TopUpRequest request = new TopUpRequest(UUID.randomUUID(), BigDecimal.TEN);
         UUID operationId = UUID.randomUUID();
-        when(balanceService.topUp(any(TopUpRequest.class))).thenReturn(operationId);
+        when(balanceService.topUp(any(TopUpRequest.class), any())).thenReturn(operationId);
 
         mockMvc.perform(post("/api/v1/balance/topup")
                         .contentType("application/json")

@@ -21,3 +21,7 @@ spring:
 
 firebase:
   credentials-path: ${FIREBASE_CREDENTIALS_PATH:F:/Repos/parko-2271f-firebase-adminsdk-fbsvc-95314aaf21.json}
+
+balance:
+  topup:
+    max-amount: ${BALANCE_TOPUP_MAX_AMOUNT:50000}

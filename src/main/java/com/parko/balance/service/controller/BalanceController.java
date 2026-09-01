@@ -26,7 +26,8 @@ public class BalanceController {
 
     @PostMapping("/topup")
     public ResponseEntity<UUID> topUp(@Valid @RequestBody TopUpRequest request, Authentication authentication) {
-        UUID operationId = balanceService.topUp(request);
+        String firebaseUid = authentication != null ? authentication.getName() : null;
+        UUID operationId = balanceService.topUp(request, firebaseUid);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(operationId);
     }
 
