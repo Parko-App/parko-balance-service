@@ -1,0 +1,95 @@
+openapi: 3.0.3
+info:
+  title: parko-balance-service
+  description: Servicio de balance de usuarios (topup y charge) de Parko.
+  version: 0.0.1
+servers:
+  - url: http://localhost:8082
+paths:
+  /api/v1/balance/topup:
+    post:
+      summary: Recarga de saldo
+      operationId: topUp
+      tags:
+        - balance
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TopUpRequest'
+      responses:
+        '202':
+          description: Operación de recarga aceptada, publicada para procesamiento asíncrono.
+          content:
+            application/json:
+              schema:
+                type: string
+                format: uuid
+        '400':
+          description: Request inválido.
+        '401':
+          description: No autenticado.
+  /api/v1/balance/charge:
+    post:
+      summary: Cobro de saldo
+      operationId: charge
+      tags:
+        - balance
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeRequest'
+      responses:
+        '202':
+          description: Operación de cobro aceptada.
+          content:
+            application/json:
+              schema:
+                type: string
+                format: uuid
+        '400':
+          description: Request inválido.
+        '401':
+          description: No autenticado.
+components:
+  securitySchemes:
+    firebaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID Token
+  schemas:
+    TopUpRequest:
+      type: object
+      required:
+        - userId
+        - amount
+      properties:
+        userId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+          minimum: 0
+          exclusiveMinimum: true
+    ChargeRequest:
+      type: object
+      required:
+        - userId
+        - amount
+      properties:
+        userId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+          minimum: 0
+          exclusiveMinimum: true

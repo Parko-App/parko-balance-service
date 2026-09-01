@@ -1,0 +1,31 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: balance.service
+  config:
+    import: "optional:configserver:"
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/parko_db}
+    username: ${DB_USERNAME:user}
+    password: ${DB_PASSWORD:password}
+  jpa:
+    hibernate:
+      ddl-auto: update
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:user}
+    password: ${RABBITMQ_PASSWORD:password}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+firebase:
+  credentials-path: ${FIREBASE_CREDENTIALS_PATH:F:/Repos/parko-2271f-firebase-adminsdk-fbsvc-95314aaf21.json}
+
+balance:
+  topup:
+    max-amount: ${BALANCE_TOPUP_MAX_AMOUNT:50000}
