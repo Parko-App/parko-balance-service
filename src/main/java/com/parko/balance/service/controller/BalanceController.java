@@ -2,11 +2,14 @@ package com.parko.balance.service.controller;
 
 import com.parko.balance.service.dto.request.ChargeRequest;
 import com.parko.balance.service.dto.request.TopUpRequest;
+import com.parko.balance.service.dto.response.TopUpPreferenceResponse;
 import com.parko.balance.service.service.BalanceService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,6 +38,13 @@ public class BalanceController {
     public ResponseEntity<UUID> charge(@Valid @RequestBody ChargeRequest request, Authentication authentication) {
         UUID operationId = balanceService.charge(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(operationId);
+    }
+
+    @GetMapping("/topup/{operationId}/preference")
+    public ResponseEntity<TopUpPreferenceResponse> getPreference(@PathVariable UUID operationId) {
+        return balanceService.findPreference(operationId)
+                .map(preferenceId -> ResponseEntity.ok(new TopUpPreferenceResponse(preferenceId)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
 }

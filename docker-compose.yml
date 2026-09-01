@@ -11,5 +11,14 @@ services:
     volumes:
       - parko-balance-rabbitmq-data:/var/lib/rabbitmq
 
+  redis:
+    image: redis:7-alpine
+    container_name: parko-balance-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - parko-balance-redis-data:/data
+
 volumes:
   parko-balance-rabbitmq-data:
+  parko-balance-redis-data:

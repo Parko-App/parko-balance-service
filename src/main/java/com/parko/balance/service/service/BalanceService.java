@@ -1,5 +1,6 @@
 package com.parko.balance.service.service;
 
+import com.parko.balance.service.cache.PreferenceCache;
 import com.parko.balance.service.dto.request.ChargeRequest;
 import com.parko.balance.service.dto.request.TopUpRequest;
 import com.parko.balance.service.event.TopUpMessage;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -21,13 +23,16 @@ public class BalanceService {
 
     private final TopUpPublisher topUpPublisher;
     private final UserRepository userRepository;
+    private final PreferenceCache preferenceCache;
     private final BigDecimal maxTopUpAmount;
 
     public BalanceService(TopUpPublisher topUpPublisher,
                            UserRepository userRepository,
+                           PreferenceCache preferenceCache,
                            @Value("${balance.topup.max-amount:100000}") BigDecimal maxTopUpAmount) {
         this.topUpPublisher = topUpPublisher;
         this.userRepository = userRepository;
+        this.preferenceCache = preferenceCache;
         this.maxTopUpAmount = maxTopUpAmount;
     }
 
@@ -51,5 +56,9 @@ public class BalanceService {
 
     public UUID charge(ChargeRequest request) {
         return UUID.randomUUID();
+    }
+
+    public Optional<String> findPreference(UUID operationId) {
+        return preferenceCache.find(operationId);
     }
 }

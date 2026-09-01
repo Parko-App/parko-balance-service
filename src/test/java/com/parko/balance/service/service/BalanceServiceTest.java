@@ -1,5 +1,6 @@
 package com.parko.balance.service.service;
 
+import com.parko.balance.service.cache.PreferenceCache;
 import com.parko.balance.service.dto.request.ChargeRequest;
 import com.parko.balance.service.dto.request.TopUpRequest;
 import com.parko.balance.service.event.TopUpMessage;
@@ -39,11 +40,14 @@ class BalanceServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private PreferenceCache preferenceCache;
+
     private BalanceService balanceService;
 
     @BeforeEach
     void setUp() {
-        balanceService = new BalanceService(topUpPublisher, userRepository, MAX_AMOUNT);
+        balanceService = new BalanceService(topUpPublisher, userRepository, preferenceCache, MAX_AMOUNT);
     }
 
     private UserEntity userWithId(UUID id) {
@@ -135,5 +139,25 @@ class BalanceServiceTest {
         UUID second = balanceService.charge(request);
 
         assertThat(first).isNotEqualTo(second);
+    }
+
+    @Test
+    void findPreference_returnsValue_whenPresentInCache() {
+        UUID operationId = UUID.randomUUID();
+        when(preferenceCache.find(operationId)).thenReturn(Optional.of("pref-1"));
+
+        Optional<String> result = balanceService.findPreference(operationId);
+
+        assertThat(result).contains("pref-1");
+    }
+
+    @Test
+    void findPreference_returnsEmpty_whenNotYetInCache() {
+        UUID operationId = UUID.randomUUID();
+        when(preferenceCache.find(operationId)).thenReturn(Optional.empty());
+
+        Optional<String> result = balanceService.findPreference(operationId);
+
+        assertThat(result).isEmpty();
     }
 }

@@ -18,6 +18,10 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:user}
     password: ${RABBITMQ_PASSWORD:password}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 firebase:
   credentials-path: ${FIREBASE_CREDENTIALS_PATH:F:/Repos/parko-2271f-firebase-adminsdk-fbsvc-95314aaf21.json}
