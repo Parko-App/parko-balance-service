@@ -3,7 +3,9 @@ package com.parko.balance.service.controller;
 import tools.jackson.databind.ObjectMapper;
 import com.parko.balance.service.dto.request.ChargeRequest;
 import com.parko.balance.service.dto.request.TopUpRequest;
+import com.parko.balance.service.dto.response.TopUpStatusResponse;
 import com.parko.balance.service.service.BalanceService;
+import com.parko.domain.lib.model.TransactionStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -12,6 +14,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -70,7 +73,7 @@ class BalanceControllerTest {
 
     @Test
     void charge_validRequest_returnsAccepted() throws Exception {
-        ChargeRequest request = new ChargeRequest(UUID.randomUUID(), BigDecimal.TEN);
+        ChargeRequest request = new ChargeRequest(UUID.randomUUID(), UUID.randomUUID(), BigDecimal.TEN);
         UUID operationId = UUID.randomUUID();
         when(balanceService.charge(any(ChargeRequest.class))).thenReturn(operationId);
 
@@ -107,6 +110,28 @@ class BalanceControllerTest {
         when(balanceService.findPreference(operationId)).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/v1/balance/topup/" + operationId + "/preference"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getTopUpStatus_returnsOk_withStatusInBody() throws Exception {
+        UUID operationId = UUID.randomUUID();
+        when(balanceService.findTopUpStatus(operationId))
+                .thenReturn(new TopUpStatusResponse(operationId, TransactionStatus.FAILED));
+
+        mockMvc.perform(get("/api/v1/balance/topup/" + operationId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operationId").value(operationId.toString()))
+                .andExpect(jsonPath("$.status").value("FAILED"));
+    }
+
+    @Test
+    void getTopUpStatus_returnsNotFound_whenTransactionMissing() throws Exception {
+        UUID operationId = UUID.randomUUID();
+        when(balanceService.findTopUpStatus(operationId))
+                .thenThrow(new NoSuchElementException("Recarga no encontrada para operationId: " + operationId));
+
+        mockMvc.perform(get("/api/v1/balance/topup/" + operationId))
                 .andExpect(status().isNotFound());
     }
 }

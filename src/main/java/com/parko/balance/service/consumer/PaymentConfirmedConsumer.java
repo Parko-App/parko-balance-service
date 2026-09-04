@@ -1,9 +1,7 @@
 package com.parko.balance.service.consumer;
 
 import com.parko.balance.service.config.RabbitConfig;
-import com.parko.balance.service.converter.TransactionConverter;
 import com.parko.balance.service.event.PaymentConfirmedMessage;
-import com.parko.domain.lib.model.Transaction;
 import com.parko.domain.lib.model.TransactionStatus;
 import com.parko.persistence.core.model.entity.BalanceAccountEntity;
 import com.parko.persistence.core.model.entity.TransactionEntity;
@@ -16,12 +14,10 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.NoSuchElementException;
-import java.util.UUID;
+import java.util.Optional;
 
 @Component
 public class PaymentConfirmedConsumer {
-
-    private static final String PAYMENT_PROVIDER = "MERCADO_PAGO";
 
     private static final Logger log = LoggerFactory.getLogger(PaymentConfirmedConsumer.class);
 
@@ -36,19 +32,27 @@ public class PaymentConfirmedConsumer {
 
     @RabbitListener(queues = RabbitConfig.PAYMENT_CONFIRMED_QUEUE)
     public void onPaymentConfirmed(PaymentConfirmedMessage message) {
-        BalanceAccountEntity account = balanceAccountRepository.findByUserId(message.userId())
-                .orElseThrow(() -> new NoSuchElementException("Cuenta de saldo no encontrada para el usuario: " + message.userId()));
+        TransactionEntity transaction = transactionRepository.findById(message.operationId())
+                .orElseThrow(() -> new NoSuchElementException("Transacción pendiente no encontrada para operationId: " + message.operationId()));
 
-        account.setAmount(account.getAmount().add(message.amount()));
-        account.setUpdatedAt(LocalDateTime.now());
-        balanceAccountRepository.save(account);
+        Optional<BalanceAccountEntity> account = balanceAccountRepository.findByUserId(message.userId());
+        if (account.isEmpty()) {
+            log.error("Cuenta de saldo no encontrada para userId={} al confirmar operationId={}, transacción marcada como FAILED",
+                    message.userId(), message.operationId());
+            transaction.setStatus(TransactionStatus.FAILED);
+            transaction.setUpdatedAt(LocalDateTime.now());
+            transactionRepository.save(transaction);
+            return;
+        }
 
-        LocalDateTime now = LocalDateTime.now();
-        Transaction transaction = Transaction.topUp(UUID.randomUUID(), account.getId(), message.amount(),
-                TransactionStatus.COMPLETED, PAYMENT_PROVIDER, message.operationId().toString());
-        TransactionEntity transactionEntity = com.parko.persistence.core.converters.TransactionConverter
-                .toEntity(TransactionConverter.toEmbedded(transaction, now, now));
-        transactionRepository.save(transactionEntity);
+        BalanceAccountEntity balanceAccount = account.get();
+        balanceAccount.setAmount(balanceAccount.getAmount().add(message.amount()));
+        balanceAccount.setUpdatedAt(LocalDateTime.now());
+        balanceAccountRepository.save(balanceAccount);
+
+        transaction.setStatus(TransactionStatus.COMPLETED);
+        transaction.setUpdatedAt(LocalDateTime.now());
+        transactionRepository.save(transaction);
 
         log.info("Saldo acreditado para operationId={}, userId={}, amount={}",
                 message.operationId(), message.userId(), message.amount());
