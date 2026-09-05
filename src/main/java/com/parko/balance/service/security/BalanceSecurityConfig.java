@@ -26,7 +26,7 @@ public class BalanceSecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/balance/**").permitAll()
+                        .requestMatchers("/api/v1/balance/**").authenticated()
                         .anyRequest().permitAll())
                 .addFilterBefore(new FirebaseAuthenticationFilter(firebaseAuth), UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(

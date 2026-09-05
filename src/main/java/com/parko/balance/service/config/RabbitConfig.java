@@ -26,6 +26,9 @@ public class RabbitConfig {
     public static final String PAYMENT_CONFIRMED_QUEUE = "balance.payment-confirmed.queue";
     public static final String PAYMENT_CONFIRMED_ROUTING_KEY = "balance.payment.confirmed";
 
+    public static final String PAYMENT_FAILED_QUEUE = "balance.payment-failed.queue";
+    public static final String PAYMENT_FAILED_ROUTING_KEY = "balance.payment.failed";
+
     public static final String TOPUP_PREFERENCE_CREATED_QUEUE = "balance.topup-preference-created.queue";
     public static final String TOPUP_PREFERENCE_CREATED_ROUTING_KEY = "balance.topup.preference.created";
 
@@ -33,6 +36,7 @@ public class RabbitConfig {
     public static final String TOPUP_DLQ = "balance.topup.dlq";
     public static final String CHARGE_DLQ = "balance.charge.dlq";
     public static final String PAYMENT_CONFIRMED_DLQ = "balance.payment-confirmed.dlq";
+    public static final String PAYMENT_FAILED_DLQ = "balance.payment-failed.dlq";
     public static final String TOPUP_PREFERENCE_CREATED_DLQ = "balance.topup-preference-created.dlq";
 
     public static final long MESSAGE_TTL_MS = 86_400_000L;
@@ -75,6 +79,15 @@ public class RabbitConfig {
     }
 
     @Bean
+    public Queue paymentFailedQueue() {
+        return QueueBuilder.durable(PAYMENT_FAILED_QUEUE)
+                .withArgument("x-dead-letter-exchange", DEAD_LETTER_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", PAYMENT_FAILED_DLQ)
+                .withArgument("x-message-ttl", MESSAGE_TTL_MS)
+                .build();
+    }
+
+    @Bean
     public Queue topUpPreferenceCreatedQueue() {
         return QueueBuilder.durable(TOPUP_PREFERENCE_CREATED_QUEUE)
                 .withArgument("x-dead-letter-exchange", DEAD_LETTER_EXCHANGE)
@@ -104,6 +117,11 @@ public class RabbitConfig {
     }
 
     @Bean
+    public Queue paymentFailedDeadLetterQueue() {
+        return new Queue(PAYMENT_FAILED_DLQ, true);
+    }
+
+    @Bean
     public Binding topUpBinding(Queue topUpQueue, DirectExchange balanceExchange) {
         return BindingBuilder.bind(topUpQueue).to(balanceExchange).with(TOPUP_ROUTING_KEY);
     }
@@ -116,6 +134,11 @@ public class RabbitConfig {
     @Bean
     public Binding paymentConfirmedBinding(Queue paymentConfirmedQueue, DirectExchange balanceExchange) {
         return BindingBuilder.bind(paymentConfirmedQueue).to(balanceExchange).with(PAYMENT_CONFIRMED_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding paymentFailedBinding(Queue paymentFailedQueue, DirectExchange balanceExchange) {
+        return BindingBuilder.bind(paymentFailedQueue).to(balanceExchange).with(PAYMENT_FAILED_ROUTING_KEY);
     }
 
     @Bean
@@ -141,6 +164,11 @@ public class RabbitConfig {
     @Bean
     public Binding topUpPreferenceCreatedDeadLetterBinding(Queue topUpPreferenceCreatedDeadLetterQueue, DirectExchange deadLetterExchange) {
         return BindingBuilder.bind(topUpPreferenceCreatedDeadLetterQueue).to(deadLetterExchange).with(TOPUP_PREFERENCE_CREATED_DLQ);
+    }
+
+    @Bean
+    public Binding paymentFailedDeadLetterBinding(Queue paymentFailedDeadLetterQueue, DirectExchange deadLetterExchange) {
+        return BindingBuilder.bind(paymentFailedDeadLetterQueue).to(deadLetterExchange).with(PAYMENT_FAILED_DLQ);
     }
 
     @Bean

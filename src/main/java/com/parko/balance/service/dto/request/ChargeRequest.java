@@ -8,6 +8,7 @@ import java.util.UUID;
 
 public record ChargeRequest(
         @NotNull UUID userId,
+        @NotNull UUID parkingSessionId,
         @NotNull @Positive BigDecimal amount
 ) {
 }

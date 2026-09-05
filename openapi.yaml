@@ -32,6 +32,28 @@ paths:
           description: Request inválido.
         '401':
           description: No autenticado.
+  /api/v1/balance/topup/{operationId}:
+    get:
+      summary: Estado de una recarga de saldo
+      operationId: getTopUpStatus
+      tags:
+        - balance
+      parameters:
+        - name: operationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Estado actual de la recarga.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TopUpStatusResponse'
+        '404':
+          description: No existe una recarga con ese operationId.
   /api/v1/balance/charge:
     post:
       summary: Cobro de saldo
@@ -79,13 +101,26 @@ components:
           format: decimal
           minimum: 0
           exclusiveMinimum: true
+    TopUpStatusResponse:
+      type: object
+      properties:
+        operationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, COMPLETED, FAILED]
     ChargeRequest:
       type: object
       required:
         - userId
+        - parkingSessionId
         - amount
       properties:
         userId:
+          type: string
+          format: uuid
+        parkingSessionId:
           type: string
           format: uuid
         amount:
