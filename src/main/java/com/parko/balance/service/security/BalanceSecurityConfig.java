@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -16,19 +17,23 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class BalanceSecurityConfig {
 
     private final FirebaseAuth firebaseAuth;
+    private final JwtDecoder jwtDecoder;
 
-    public BalanceSecurityConfig(FirebaseAuth firebaseAuth) {
+    public BalanceSecurityConfig(FirebaseAuth firebaseAuth, JwtDecoder jwtDecoder) {
         this.firebaseAuth = firebaseAuth;
+        this.jwtDecoder = jwtDecoder;
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        FirebaseAuthenticationFilter firebaseFilter = new FirebaseAuthenticationFilter(firebaseAuth);
         return http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/balance/**").authenticated()
                         .anyRequest().permitAll())
-                .addFilterBefore(new FirebaseAuthenticationFilter(firebaseAuth), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(firebaseFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(new KeycloakAuthenticationFilter(jwtDecoder), FirebaseAuthenticationFilter.class)
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(
                         (request, response, authException) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED)))
                 .build();
