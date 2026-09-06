@@ -3,6 +3,7 @@ package com.parko.balance.service.service;
 import com.parko.balance.service.cache.PreferenceCache;
 import com.parko.balance.service.dto.request.ChargeRequest;
 import com.parko.balance.service.dto.request.TopUpRequest;
+import com.parko.balance.service.dto.response.TransactionResponse;
 import com.parko.balance.service.event.TopUpMessage;
 import com.parko.balance.service.exception.OwnershipMismatchException;
 import com.parko.balance.service.exception.TopUpAmountExceededException;
@@ -21,8 +22,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +37,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -384,5 +392,57 @@ class BalanceServiceTest {
 
         assertThatThrownBy(() -> balanceService.findTopUpStatus(operationId))
                 .isInstanceOf(NoSuchElementException.class);
+    }
+
+    @Test
+    void findTransactions_withMonthAndYear_queriesDateRangeForThatMonth() {
+        String firebaseUid = "firebase-uid-abc";
+        TransactionEntity entity = transactionWithTypeAndStatus(UUID.randomUUID(), TransactionType.TOPUP, TransactionStatus.COMPLETED);
+        entity.setCreatedAt(LocalDateTime.of(2026, 9, 15, 10, 0));
+        Page<TransactionEntity> page = new PageImpl<>(List.of(entity));
+        when(transactionRepository.findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
+                eq(firebaseUid), any(), any(), any(Pageable.class))).thenReturn(page);
+
+        Page<TransactionResponse> result = balanceService.findTransactions(firebaseUid, 9, 2026, 0, 20);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).title()).isEqualTo("Carga de saldo");
+
+        ArgumentCaptor<LocalDateTime> fromCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        ArgumentCaptor<LocalDateTime> toCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(transactionRepository).findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
+                eq(firebaseUid), fromCaptor.capture(), toCaptor.capture(), pageableCaptor.capture());
+        assertThat(fromCaptor.getValue()).isEqualTo(LocalDateTime.of(2026, 9, 1, 0, 0));
+        assertThat(toCaptor.getValue()).isEqualTo(LocalDateTime.of(2026, 10, 1, 0, 0));
+        assertThat(pageableCaptor.getValue()).isEqualTo(PageRequest.of(0, 20));
+    }
+
+    @Test
+    void findTransactions_withoutMonthOrYear_returnsLastThreeIgnoringPageAndSize() {
+        String firebaseUid = "firebase-uid-abc";
+        when(transactionRepository.findByBalanceAccount_User_FirebaseUidOrderByCreatedAtDesc(eq(firebaseUid), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        balanceService.findTransactions(firebaseUid, null, null, 3, 50);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(transactionRepository).findByBalanceAccount_User_FirebaseUidOrderByCreatedAtDesc(eq(firebaseUid), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue()).isEqualTo(PageRequest.of(0, 3));
+        verify(transactionRepository, never())
+                .findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(any(), any(), any(), any());
+    }
+
+    @Test
+    void findTransactions_withOnlyMonth_treatsAsMissingFilter() {
+        String firebaseUid = "firebase-uid-abc";
+        when(transactionRepository.findByBalanceAccount_User_FirebaseUidOrderByCreatedAtDesc(eq(firebaseUid), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        balanceService.findTransactions(firebaseUid, 9, null, 0, 20);
+
+        verify(transactionRepository).findByBalanceAccount_User_FirebaseUidOrderByCreatedAtDesc(eq(firebaseUid), any(Pageable.class));
+        verify(transactionRepository, never())
+                .findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(any(), any(), any(), any());
     }
 }

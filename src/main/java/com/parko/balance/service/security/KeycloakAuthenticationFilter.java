@@ -11,6 +11,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Collections;
 
 public class KeycloakAuthenticationFilter extends OncePerRequestFilter {
 
@@ -28,7 +29,7 @@ public class KeycloakAuthenticationFilter extends OncePerRequestFilter {
             if (header != null && header.startsWith("Bearer ")) {
                 try {
                     var jwt = jwtDecoder.decode(header.substring(7));
-                    SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
+                    SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, Collections.emptyList()));
                 } catch (JwtException e) {
                     SecurityContextHolder.clearContext();
                 }

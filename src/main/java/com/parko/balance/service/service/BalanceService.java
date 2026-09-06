@@ -2,9 +2,11 @@ package com.parko.balance.service.service;
 
 import com.parko.balance.service.cache.PreferenceCache;
 import com.parko.balance.service.converter.TransactionConverter;
+import com.parko.balance.service.converter.TransactionResponseConverter;
 import com.parko.balance.service.dto.request.ChargeRequest;
 import com.parko.balance.service.dto.request.TopUpRequest;
 import com.parko.balance.service.dto.response.TopUpStatusResponse;
+import com.parko.balance.service.dto.response.TransactionResponse;
 import com.parko.balance.service.event.TopUpMessage;
 import com.parko.balance.service.exception.OwnershipMismatchException;
 import com.parko.balance.service.exception.TopUpAmountExceededException;
@@ -20,11 +22,15 @@ import com.parko.persistence.core.repository.TransactionRepository;
 import com.parko.persistence.core.repository.UserRepository;
 import org.springframework.amqp.AmqpException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -136,5 +142,19 @@ public class BalanceService {
                 .orElseThrow(() -> new NoSuchElementException("Recarga no encontrada para operationId: " + operationId));
 
         return new TopUpStatusResponse(operationId, transaction.getStatus());
+    }
+
+    public Page<TransactionResponse> findTransactions(String firebaseUid, Integer month, Integer year, int page, int size) {
+        Page<TransactionEntity> entities;
+        if (month != null && year != null) {
+            LocalDateTime from = YearMonth.of(year, month).atDay(1).atStartOfDay();
+            LocalDateTime to = from.plusMonths(1);
+            entities = transactionRepository.findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
+                    firebaseUid, from, to, PageRequest.of(page, size));
+        } else {
+            Pageable lastThree = PageRequest.of(0, 3);
+            entities = transactionRepository.findByBalanceAccount_User_FirebaseUidOrderByCreatedAtDesc(firebaseUid, lastThree);
+        }
+        return entities.map(TransactionResponseConverter::toResponse);
     }
 }
