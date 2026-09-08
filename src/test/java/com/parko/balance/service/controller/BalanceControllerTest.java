@@ -4,21 +4,29 @@ import tools.jackson.databind.ObjectMapper;
 import com.parko.balance.service.dto.request.ChargeRequest;
 import com.parko.balance.service.dto.request.TopUpRequest;
 import com.parko.balance.service.dto.response.TopUpStatusResponse;
+import com.parko.balance.service.dto.response.TransactionResponse;
 import com.parko.balance.service.service.BalanceService;
 import com.parko.domain.lib.model.TransactionStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -133,5 +141,48 @@ class BalanceControllerTest {
 
         mockMvc.perform(get("/api/v1/balance/topup/" + operationId))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getTransactions_returnsOk_withPageContent() throws Exception {
+        Authentication authentication = new UsernamePasswordAuthenticationToken("firebase-uid-123", null);
+        TransactionResponse item = new TransactionResponse(
+                UUID.randomUUID().toString(), "Carga de saldo", BigDecimal.valueOf(1200), "6/9/2026", "02:05 PM", "carga");
+        Page<TransactionResponse> page = new PageImpl<>(List.of(item));
+        when(balanceService.findTransactions(eq("firebase-uid-123"), any(), any(), anyInt(), anyInt())).thenReturn(page);
+
+        mockMvc.perform(get("/api/v1/balance/transactions").principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].title").value("Carga de saldo"))
+                .andExpect(jsonPath("$.content[0].type").value("carga"));
+    }
+
+    @Test
+    void getTransactions_passesMonthYearPageAndSizeFromQueryParams() throws Exception {
+        Authentication authentication = new UsernamePasswordAuthenticationToken("firebase-uid-123", null);
+        when(balanceService.findTransactions(any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/api/v1/balance/transactions")
+                        .principal(authentication)
+                        .param("month", "9")
+                        .param("year", "2026")
+                        .param("page", "2")
+                        .param("size", "5"))
+                .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(balanceService).findTransactions("firebase-uid-123", 9, 2026, 2, 5);
+    }
+
+    @Test
+    void getTransactions_defaultsPageAndSize_whenNotProvided() throws Exception {
+        Authentication authentication = new UsernamePasswordAuthenticationToken("firebase-uid-123", null);
+        when(balanceService.findTransactions(any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/api/v1/balance/transactions").principal(authentication))
+                .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(balanceService).findTransactions("firebase-uid-123", null, null, 0, 20);
     }
 }
