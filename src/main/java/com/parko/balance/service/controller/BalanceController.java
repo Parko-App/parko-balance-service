@@ -45,15 +45,17 @@ public class BalanceController {
     }
 
     @GetMapping("/topup/{operationId}/preference")
-    public ResponseEntity<TopUpPreferenceResponse> getPreference(@PathVariable UUID operationId) {
-        return balanceService.findPreference(operationId)
+    public ResponseEntity<TopUpPreferenceResponse> getPreference(@PathVariable UUID operationId, Authentication authentication) {
+        String firebaseUid = authentication != null ? authentication.getName() : null;
+        return balanceService.findPreference(operationId, firebaseUid)
                 .map(preferenceId -> ResponseEntity.ok(new TopUpPreferenceResponse(preferenceId)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @GetMapping("/topup/{operationId}")
-    public ResponseEntity<TopUpStatusResponse> getTopUpStatus(@PathVariable UUID operationId) {
-        return ResponseEntity.ok(balanceService.findTopUpStatus(operationId));
+    public ResponseEntity<TopUpStatusResponse> getTopUpStatus(@PathVariable UUID operationId, Authentication authentication) {
+        String firebaseUid = authentication != null ? authentication.getName() : null;
+        return ResponseEntity.ok(balanceService.findTopUpStatus(operationId, firebaseUid));
     }
 
     @GetMapping("/transactions")

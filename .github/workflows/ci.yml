@@ -61,3 +61,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PACKAGES_READ_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
           FIREBASE_CREDENTIALS_PATH: ${{ runner.temp }}/firebase-creds.json
+          # El Postgres del CI arranca vacio y el servicio usa ddl-auto=validate por defecto: aca se crean las tablas.
+          HIBERNATE_DDL_AUTO: update

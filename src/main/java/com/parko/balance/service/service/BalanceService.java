@@ -8,6 +8,7 @@ import com.parko.balance.service.dto.request.TopUpRequest;
 import com.parko.balance.service.dto.response.TopUpStatusResponse;
 import com.parko.balance.service.dto.response.TransactionResponse;
 import com.parko.balance.service.event.TopUpMessage;
+import com.parko.balance.service.exception.InvalidQueryParameterException;
 import com.parko.balance.service.exception.OwnershipMismatchException;
 import com.parko.balance.service.exception.TopUpAmountExceededException;
 import com.parko.balance.service.publisher.TopUpPublisher;
@@ -26,6 +27,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -40,6 +42,7 @@ public class BalanceService {
 
     private static final String TOPUP_PAYMENT_PROVIDER = "MERCADO_PAGO";
     private static final String CHARGE_PAYMENT_PROVIDER = "INTERNAL_BALANCE";
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final TopUpPublisher topUpPublisher;
     private final UserRepository userRepository;
@@ -98,6 +101,7 @@ public class BalanceService {
         return operationId;
     }
 
+    @Transactional
     public UUID charge(ChargeRequest request) {
         BalanceAccountEntity account = balanceAccountRepository.findByUserId(request.userId())
                 .orElseThrow(() -> new NoSuchElementException("Cuenta de saldo no encontrada para el usuario: " + request.userId()));
@@ -132,25 +136,52 @@ public class BalanceService {
         return transactionEntity.getId();
     }
 
-    public Optional<String> findPreference(UUID operationId) {
+    @Transactional(readOnly = true)
+    public Optional<String> findPreference(UUID operationId, String firebaseUid) {
+        if (findOwnedTopUp(operationId, firebaseUid).isEmpty()) {
+            return Optional.empty();
+        }
         return preferenceCache.find(operationId);
     }
 
-    public TopUpStatusResponse findTopUpStatus(UUID operationId) {
-        TransactionEntity transaction = transactionRepository.findById(operationId)
-                .filter(entity -> entity.getType() == TransactionType.TOPUP)
+    @Transactional(readOnly = true)
+    public TopUpStatusResponse findTopUpStatus(UUID operationId, String firebaseUid) {
+        TransactionEntity transaction = findOwnedTopUp(operationId, firebaseUid)
                 .orElseThrow(() -> new NoSuchElementException("Recarga no encontrada para operationId: " + operationId));
 
         return new TopUpStatusResponse(operationId, transaction.getStatus());
     }
 
+    /**
+     * Devuelve la recarga solo si existe, es de tipo TOPUP y pertenece al usuario autenticado. Si no es suya
+     * se comporta igual que si no existiera (el llamador responde 404), para no revelar que el id existe.
+     */
+    private Optional<TransactionEntity> findOwnedTopUp(UUID operationId, String firebaseUid) {
+        if (firebaseUid == null) {
+            return Optional.empty();
+        }
+        return transactionRepository.findById(operationId)
+                .filter(entity -> entity.getType() == TransactionType.TOPUP)
+                .filter(entity -> entity.getBalanceAccount() != null
+                        && entity.getBalanceAccount().getUser() != null
+                        && firebaseUid.equals(entity.getBalanceAccount().getUser().getFirebaseUid()));
+    }
+
     public Page<TransactionResponse> findTransactions(String firebaseUid, Integer month, Integer year, int page, int size) {
         Page<TransactionEntity> entities;
         if (month != null && year != null) {
+            if (month < 1 || month > 12) {
+                throw new InvalidQueryParameterException("month debe estar entre 1 y 12");
+            }
+            if (year < 1 || year > 9999) {
+                throw new InvalidQueryParameterException("year debe estar entre 1 y 9999");
+            }
             LocalDateTime from = YearMonth.of(year, month).atDay(1).atStartOfDay();
             LocalDateTime to = from.plusMonths(1);
+            int safePage = Math.max(page, 0);
+            int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
             entities = transactionRepository.findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
-                    firebaseUid, from, to, PageRequest.of(page, size));
+                    firebaseUid, from, to, PageRequest.of(safePage, safeSize));
         } else {
             Pageable lastThree = PageRequest.of(0, 3);
             entities = transactionRepository.findByBalanceAccount_User_FirebaseUidOrderByCreatedAtDesc(firebaseUid, lastThree);
