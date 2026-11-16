@@ -1,0 +1,24 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: parko-balance-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - parko-balance-rabbitmq-data:/var/lib/rabbitmq
+
+  redis:
+    image: redis:7-alpine
+    container_name: parko-balance-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - parko-balance-redis-data:/data
+
+volumes:
+  parko-balance-rabbitmq-data:
+  parko-balance-redis-data:
