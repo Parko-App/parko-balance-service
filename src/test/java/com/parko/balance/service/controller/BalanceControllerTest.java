@@ -105,7 +105,7 @@ class BalanceControllerTest {
     @Test
     void getPreference_returnsOk_whenPreferenceIsCached() throws Exception {
         UUID operationId = UUID.randomUUID();
-        when(balanceService.findPreference(operationId)).thenReturn(Optional.of("pref-1"));
+        when(balanceService.findPreference(eq(operationId), any())).thenReturn(Optional.of("pref-1"));
 
         mockMvc.perform(get("/api/v1/balance/topup/" + operationId + "/preference"))
                 .andExpect(status().isOk())
@@ -115,7 +115,7 @@ class BalanceControllerTest {
     @Test
     void getPreference_returnsNotFound_whenNotYetCached() throws Exception {
         UUID operationId = UUID.randomUUID();
-        when(balanceService.findPreference(operationId)).thenReturn(Optional.empty());
+        when(balanceService.findPreference(eq(operationId), any())).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/v1/balance/topup/" + operationId + "/preference"))
                 .andExpect(status().isNotFound());
@@ -124,7 +124,7 @@ class BalanceControllerTest {
     @Test
     void getTopUpStatus_returnsOk_withStatusInBody() throws Exception {
         UUID operationId = UUID.randomUUID();
-        when(balanceService.findTopUpStatus(operationId))
+        when(balanceService.findTopUpStatus(eq(operationId), any()))
                 .thenReturn(new TopUpStatusResponse(operationId, TransactionStatus.FAILED));
 
         mockMvc.perform(get("/api/v1/balance/topup/" + operationId))
@@ -134,9 +134,26 @@ class BalanceControllerTest {
     }
 
     @Test
+    void topUpEndpoints_passTheAuthenticatedFirebaseUidToTheService() throws Exception {
+        Authentication authentication = new UsernamePasswordAuthenticationToken("firebase-uid-123", null);
+        UUID operationId = UUID.randomUUID();
+        when(balanceService.findPreference(eq(operationId), any())).thenReturn(Optional.of("pref-1"));
+        when(balanceService.findTopUpStatus(eq(operationId), any()))
+                .thenReturn(new TopUpStatusResponse(operationId, TransactionStatus.PENDING));
+
+        mockMvc.perform(get("/api/v1/balance/topup/" + operationId + "/preference").principal(authentication))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/balance/topup/" + operationId).principal(authentication))
+                .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(balanceService).findPreference(operationId, "firebase-uid-123");
+        org.mockito.Mockito.verify(balanceService).findTopUpStatus(operationId, "firebase-uid-123");
+    }
+
+    @Test
     void getTopUpStatus_returnsNotFound_whenTransactionMissing() throws Exception {
         UUID operationId = UUID.randomUUID();
-        when(balanceService.findTopUpStatus(operationId))
+        when(balanceService.findTopUpStatus(eq(operationId), any()))
                 .thenThrow(new NoSuchElementException("Recarga no encontrada para operationId: " + operationId));
 
         mockMvc.perform(get("/api/v1/balance/topup/" + operationId))
@@ -172,6 +189,20 @@ class BalanceControllerTest {
                 .andExpect(status().isOk());
 
         org.mockito.Mockito.verify(balanceService).findTransactions("firebase-uid-123", 9, 2026, 2, 5);
+    }
+
+    @Test
+    void getTransactions_returnsBadRequest_whenServiceRejectsInvalidParameter() throws Exception {
+        Authentication authentication = new UsernamePasswordAuthenticationToken("firebase-uid-123", null);
+        when(balanceService.findTransactions(any(), any(), any(), anyInt(), anyInt()))
+                .thenThrow(new com.parko.balance.service.exception.InvalidQueryParameterException("month debe estar entre 1 y 12"));
+
+        mockMvc.perform(get("/api/v1/balance/transactions")
+                        .principal(authentication)
+                        .param("month", "13")
+                        .param("year", "2026"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("INVALID_PARAMETER"));
     }
 
     @Test

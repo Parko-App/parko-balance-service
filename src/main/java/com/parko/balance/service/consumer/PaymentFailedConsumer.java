@@ -5,10 +5,13 @@ import com.parko.balance.service.event.PaymentFailedMessage;
 import com.parko.domain.lib.model.TransactionStatus;
 import com.parko.persistence.core.model.entity.TransactionEntity;
 import com.parko.persistence.core.repository.TransactionRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.NoSuchElementException;
@@ -19,15 +22,26 @@ public class PaymentFailedConsumer {
     private static final Logger log = LoggerFactory.getLogger(PaymentFailedConsumer.class);
 
     private final TransactionRepository transactionRepository;
+    private final EntityManager entityManager;
 
-    public PaymentFailedConsumer(TransactionRepository transactionRepository) {
+    public PaymentFailedConsumer(TransactionRepository transactionRepository, EntityManager entityManager) {
         this.transactionRepository = transactionRepository;
+        this.entityManager = entityManager;
     }
 
     @RabbitListener(queues = RabbitConfig.PAYMENT_FAILED_QUEUE)
+    @Transactional
     public void onPaymentFailed(PaymentFailedMessage message) {
-        TransactionEntity transaction = transactionRepository.findById(message.operationId())
-                .orElseThrow(() -> new NoSuchElementException("Transacción pendiente no encontrada para operationId: " + message.operationId()));
+        TransactionEntity transaction = entityManager.find(
+                TransactionEntity.class, message.operationId(), LockModeType.PESSIMISTIC_WRITE);
+        if (transaction == null) {
+            throw new NoSuchElementException("Transacción pendiente no encontrada para operationId: " + message.operationId());
+        }
+        if (transaction.getStatus() == TransactionStatus.COMPLETED) {
+            log.warn("La operación {} ya estaba acreditada (COMPLETED), se ignora el rechazo tardío (reason={})",
+                    message.operationId(), message.reason());
+            return;
+        }
 
         transaction.setStatus(TransactionStatus.FAILED);
         transaction.setUpdatedAt(LocalDateTime.now());

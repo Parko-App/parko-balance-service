@@ -35,6 +35,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiError("AMOUNT_EXCEEDED", ex.getMessage()));
     }
 
+    @ExceptionHandler(InvalidQueryParameterException.class)
+    public ResponseEntity<ApiError> handleInvalidQueryParameter(InvalidQueryParameterException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiError("INVALID_PARAMETER", ex.getMessage()));
+    }
+
     @ExceptionHandler(NoSuchElementException.class)
     public ResponseEntity<ApiError> handleNotFound(NoSuchElementException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiError("NOT_FOUND", ex.getMessage()));

@@ -12,7 +12,7 @@ spring:
     password: ${DB_PASSWORD:password}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${HIBERNATE_DDL_AUTO:validate}
   security:
     oauth2:
       resourceserver:
@@ -34,3 +34,5 @@ firebase:
 balance:
   topup:
     max-amount: ${BALANCE_TOPUP_MAX_AMOUNT:50000}
+  charge:
+    allowed-client-id: ${BALANCE_CHARGE_ALLOWED_CLIENT_ID:access-service}

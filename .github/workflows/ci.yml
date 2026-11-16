@@ -61,3 +61,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PACKAGES_READ_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
           FIREBASE_CREDENTIALS_PATH: ${{ runner.temp }}/firebase-creds.json
+          HIBERNATE_DDL_AUTO: update

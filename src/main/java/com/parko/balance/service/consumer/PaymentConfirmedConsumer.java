@@ -7,10 +7,13 @@ import com.parko.persistence.core.model.entity.BalanceAccountEntity;
 import com.parko.persistence.core.model.entity.TransactionEntity;
 import com.parko.persistence.core.repository.BalanceAccountRepository;
 import com.parko.persistence.core.repository.TransactionRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.NoSuchElementException;
@@ -23,17 +26,28 @@ public class PaymentConfirmedConsumer {
 
     private final BalanceAccountRepository balanceAccountRepository;
     private final TransactionRepository transactionRepository;
+    private final EntityManager entityManager;
 
     public PaymentConfirmedConsumer(BalanceAccountRepository balanceAccountRepository,
-                                     TransactionRepository transactionRepository) {
+                                     TransactionRepository transactionRepository,
+                                     EntityManager entityManager) {
         this.balanceAccountRepository = balanceAccountRepository;
         this.transactionRepository = transactionRepository;
+        this.entityManager = entityManager;
     }
 
     @RabbitListener(queues = RabbitConfig.PAYMENT_CONFIRMED_QUEUE)
+    @Transactional
     public void onPaymentConfirmed(PaymentConfirmedMessage message) {
-        TransactionEntity transaction = transactionRepository.findById(message.operationId())
-                .orElseThrow(() -> new NoSuchElementException("Transacción pendiente no encontrada para operationId: " + message.operationId()));
+        TransactionEntity transaction = entityManager.find(
+                TransactionEntity.class, message.operationId(), LockModeType.PESSIMISTIC_WRITE);
+        if (transaction == null) {
+            throw new NoSuchElementException("Transacción pendiente no encontrada para operationId: " + message.operationId());
+        }
+        if (transaction.getStatus() == TransactionStatus.COMPLETED) {
+            log.warn("La operación {} ya estaba acreditada (COMPLETED), se ignora el mensaje duplicado", message.operationId());
+            return;
+        }
 
         Optional<BalanceAccountEntity> account = balanceAccountRepository.findByUserId(message.userId());
         if (account.isEmpty()) {

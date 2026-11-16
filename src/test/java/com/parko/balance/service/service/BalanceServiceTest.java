@@ -5,6 +5,7 @@ import com.parko.balance.service.dto.request.ChargeRequest;
 import com.parko.balance.service.dto.request.TopUpRequest;
 import com.parko.balance.service.dto.response.TransactionResponse;
 import com.parko.balance.service.event.TopUpMessage;
+import com.parko.balance.service.exception.InvalidQueryParameterException;
 import com.parko.balance.service.exception.OwnershipMismatchException;
 import com.parko.balance.service.exception.TopUpAmountExceededException;
 import com.parko.balance.service.publisher.TopUpPublisher;
@@ -335,23 +336,56 @@ class BalanceServiceTest {
     }
 
     @Test
-    void findPreference_returnsValue_whenPresentInCache() {
+    void findPreference_returnsValue_whenOwnerAndPresentInCache() {
         UUID operationId = UUID.randomUUID();
+        when(transactionRepository.findById(operationId)).thenReturn(Optional.of(
+                transactionOwnedBy(FIREBASE_UID, operationId, TransactionType.TOPUP, TransactionStatus.PENDING)));
         when(preferenceCache.find(operationId)).thenReturn(Optional.of("pref-1"));
 
-        Optional<String> result = balanceService.findPreference(operationId);
+        Optional<String> result = balanceService.findPreference(operationId, FIREBASE_UID);
 
         assertThat(result).contains("pref-1");
     }
 
     @Test
-    void findPreference_returnsEmpty_whenNotYetInCache() {
+    void findPreference_returnsEmpty_whenOwnerButNotYetInCache() {
         UUID operationId = UUID.randomUUID();
+        when(transactionRepository.findById(operationId)).thenReturn(Optional.of(
+                transactionOwnedBy(FIREBASE_UID, operationId, TransactionType.TOPUP, TransactionStatus.PENDING)));
         when(preferenceCache.find(operationId)).thenReturn(Optional.empty());
 
-        Optional<String> result = balanceService.findPreference(operationId);
+        Optional<String> result = balanceService.findPreference(operationId, FIREBASE_UID);
 
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void findPreference_returnsEmptyWithoutReadingCache_whenNotOwner() {
+        UUID operationId = UUID.randomUUID();
+        when(transactionRepository.findById(operationId)).thenReturn(Optional.of(
+                transactionOwnedBy("otro-uid", operationId, TransactionType.TOPUP, TransactionStatus.PENDING)));
+
+        Optional<String> result = balanceService.findPreference(operationId, FIREBASE_UID);
+
+        assertThat(result).isEmpty();
+        verify(preferenceCache, never()).find(any());
+    }
+
+    @Test
+    void findPreference_returnsEmpty_whenTransactionDoesNotExist() {
+        UUID operationId = UUID.randomUUID();
+        when(transactionRepository.findById(operationId)).thenReturn(Optional.empty());
+
+        assertThat(balanceService.findPreference(operationId, FIREBASE_UID)).isEmpty();
+        verify(preferenceCache, never()).find(any());
+    }
+
+    @Test
+    void findPreference_returnsEmpty_whenThereIsNoAuthenticatedUser() {
+        UUID operationId = UUID.randomUUID();
+
+        assertThat(balanceService.findPreference(operationId, null)).isEmpty();
+        verify(preferenceCache, never()).find(any());
     }
 
     private TransactionEntity transactionWithTypeAndStatus(UUID id, TransactionType type, TransactionStatus status) {
@@ -363,16 +397,37 @@ class BalanceServiceTest {
         return transaction;
     }
 
-    @Test
-    void findTopUpStatus_returnsStatus_whenTopUpTransactionExists() {
-        UUID operationId = UUID.randomUUID();
-        when(transactionRepository.findById(operationId))
-                .thenReturn(Optional.of(transactionWithTypeAndStatus(operationId, TransactionType.TOPUP, TransactionStatus.FAILED)));
+    private TransactionEntity transactionOwnedBy(String firebaseUid, UUID id, TransactionType type, TransactionStatus status) {
+        UserEntity owner = new UserEntity();
+        owner.setFirebaseUid(firebaseUid);
+        BalanceAccountEntity account = new BalanceAccountEntity();
+        account.setUser(owner);
+        TransactionEntity transaction = transactionWithTypeAndStatus(id, type, status);
+        transaction.setBalanceAccount(account);
+        return transaction;
+    }
 
-        var result = balanceService.findTopUpStatus(operationId);
+    @Test
+    void findTopUpStatus_returnsStatus_whenOwnerOfTheTopUp() {
+        UUID operationId = UUID.randomUUID();
+        when(transactionRepository.findById(operationId)).thenReturn(Optional.of(
+                transactionOwnedBy(FIREBASE_UID, operationId, TransactionType.TOPUP, TransactionStatus.FAILED)));
+
+        var result = balanceService.findTopUpStatus(operationId, FIREBASE_UID);
 
         assertThat(result.operationId()).isEqualTo(operationId);
         assertThat(result.status()).isEqualTo(TransactionStatus.FAILED);
+    }
+
+    @Test
+    void findTopUpStatus_throwsNoSuchElement_whenNotOwner_sameAsIfItDidNotExist() {
+        UUID operationId = UUID.randomUUID();
+        when(transactionRepository.findById(operationId)).thenReturn(Optional.of(
+                transactionOwnedBy("otro-uid", operationId, TransactionType.TOPUP, TransactionStatus.PENDING)));
+
+        assertThatThrownBy(() -> balanceService.findTopUpStatus(operationId, FIREBASE_UID))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessage("Recarga no encontrada para operationId: " + operationId);
     }
 
     @Test
@@ -380,17 +435,26 @@ class BalanceServiceTest {
         UUID operationId = UUID.randomUUID();
         when(transactionRepository.findById(operationId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> balanceService.findTopUpStatus(operationId))
-                .isInstanceOf(NoSuchElementException.class);
+        assertThatThrownBy(() -> balanceService.findTopUpStatus(operationId, FIREBASE_UID))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessage("Recarga no encontrada para operationId: " + operationId);
     }
 
     @Test
     void findTopUpStatus_throwsNoSuchElement_whenTransactionIsNotATopUp() {
         UUID operationId = UUID.randomUUID();
-        when(transactionRepository.findById(operationId))
-                .thenReturn(Optional.of(transactionWithTypeAndStatus(operationId, TransactionType.CHARGE, TransactionStatus.COMPLETED)));
+        when(transactionRepository.findById(operationId)).thenReturn(Optional.of(
+                transactionOwnedBy(FIREBASE_UID, operationId, TransactionType.CHARGE, TransactionStatus.COMPLETED)));
 
-        assertThatThrownBy(() -> balanceService.findTopUpStatus(operationId))
+        assertThatThrownBy(() -> balanceService.findTopUpStatus(operationId, FIREBASE_UID))
+                .isInstanceOf(NoSuchElementException.class);
+    }
+
+    @Test
+    void findTopUpStatus_throwsNoSuchElement_whenThereIsNoAuthenticatedUser() {
+        UUID operationId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> balanceService.findTopUpStatus(operationId, null))
                 .isInstanceOf(NoSuchElementException.class);
     }
 
@@ -431,6 +495,58 @@ class BalanceServiceTest {
         assertThat(pageableCaptor.getValue()).isEqualTo(PageRequest.of(0, 3));
         verify(transactionRepository, never())
                 .findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(any(), any(), any(), any());
+    }
+
+    @Test
+    void findTransactions_capsPageSizeAtMaximum() {
+        String firebaseUid = "firebase-uid-abc";
+        when(transactionRepository.findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
+                eq(firebaseUid), any(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+
+        balanceService.findTransactions(firebaseUid, 9, 2026, 0, 500000);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(transactionRepository).findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
+                eq(firebaseUid), any(), any(), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue()).isEqualTo(PageRequest.of(0, 100));
+    }
+
+    @Test
+    void findTransactions_normalizesNonPositiveSizeAndNegativePage() {
+        String firebaseUid = "firebase-uid-abc";
+        when(transactionRepository.findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
+                eq(firebaseUid), any(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+
+        balanceService.findTransactions(firebaseUid, 9, 2026, -5, 0);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(transactionRepository).findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
+                eq(firebaseUid), any(), any(), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue()).isEqualTo(PageRequest.of(0, 1));
+    }
+
+    @Test
+    void findTransactions_throwsInvalidParameter_whenMonthOutOfRange() {
+        assertThatThrownBy(() -> balanceService.findTransactions("uid", 0, 2026, 0, 20))
+                .isInstanceOf(InvalidQueryParameterException.class);
+        assertThatThrownBy(() -> balanceService.findTransactions("uid", 13, 2026, 0, 20))
+                .isInstanceOf(InvalidQueryParameterException.class);
+        assertThatThrownBy(() -> balanceService.findTransactions("uid", -1, 2026, 0, 20))
+                .isInstanceOf(InvalidQueryParameterException.class);
+    }
+
+    @Test
+    void findTransactions_throwsInvalidParameter_whenYearOutOfRange() {
+        assertThatThrownBy(() -> balanceService.findTransactions("uid", 9, 0, 0, 20))
+                .isInstanceOf(InvalidQueryParameterException.class);
+        assertThatThrownBy(() -> balanceService.findTransactions("uid", 9, 100000, 0, 20))
+                .isInstanceOf(InvalidQueryParameterException.class);
+    }
+
+    @Test
+    void charge_isTransactional_soDebitAndLedgerEntryAreAtomic() throws NoSuchMethodException {
+        assertThat(BalanceService.class.getMethod("charge", ChargeRequest.class)
+                .isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class)).isTrue();
     }
 
     @Test
