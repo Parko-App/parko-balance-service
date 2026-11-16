@@ -12,9 +12,6 @@ spring:
     password: ${DB_PASSWORD:password}
   jpa:
     hibernate:
-      # validate: no modifica el esquema, falla al arrancar si las entidades no coinciden con las tablas.
-      # El esquema se mantiene con los scripts de parko-postgre-schemas. Para volver al comportamiento anterior
-      # (o en un entorno con base vacia) definir HIBERNATE_DDL_AUTO=update.
       ddl-auto: ${HIBERNATE_DDL_AUTO:validate}
   security:
     oauth2:
@@ -38,6 +35,4 @@ balance:
   topup:
     max-amount: ${BALANCE_TOPUP_MAX_AMOUNT:50000}
   charge:
-    # Client de Keycloak (claim "azp") autorizado a llamar a POST /api/v1/balance/charge.
-    # Debe coincidir con el KEYCLOAK_CLIENT_ID con el que access-service pide su token.
     allowed-client-id: ${BALANCE_CHARGE_ALLOWED_CLIENT_ID:access-service}

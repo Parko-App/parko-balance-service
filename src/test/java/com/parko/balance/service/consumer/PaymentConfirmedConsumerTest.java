@@ -148,8 +148,6 @@ class PaymentConfirmedConsumerTest {
         verify(transactionRepository, never()).save(any());
     }
 
-    // --- H8: idempotencia ---
-
     @Test
     void onPaymentConfirmed_ignoresDuplicateMessage_whenAlreadyCompleted() {
         UUID userId = UUID.randomUUID();

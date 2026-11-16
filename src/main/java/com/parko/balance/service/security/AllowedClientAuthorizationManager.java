@@ -8,12 +8,6 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 
 import java.util.function.Supplier;
 
-/**
- * Autoriza solo a quien se autentico con un token de Keycloak emitido para un client concreto
- * (claim {@code azp}, "authorized party"). Se usa para endpoints que solo debe llamar otro servicio de
- * Parko (p. ej. {@code POST /balance/charge}, que invoca access-service con su token de service account) y
- * nunca un usuario final: un token de usuario de Firebase, o de cualquier otro client, queda rechazado.
- */
 public class AllowedClientAuthorizationManager implements AuthorizationManager<RequestAuthorizationContext> {
 
     private static final String AUTHORIZED_PARTY_CLAIM = "azp";

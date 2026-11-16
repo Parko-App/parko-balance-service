@@ -71,7 +71,6 @@ class BalanceSecurityConfigTest {
             "{\"userId\":\"" + UUID.randomUUID() + "\",\"parkingSessionId\":\"" + UUID.randomUUID() + "\",\"amount\":1.00}";
 
     private void stubKeycloakToken(String token, String azp) throws Exception {
-        // un token de Keycloak no es un token de Firebase: la verificacion de Firebase lo rechaza
         when(firebaseAuth.verifyIdToken(token)).thenThrow(mock(FirebaseAuthException.class));
         when(jwtDecoder.decode(token)).thenReturn(
                 Jwt.withTokenValue(token).header("alg", "none").claim("sub", "svc").claim("azp", azp).build());

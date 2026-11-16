@@ -152,10 +152,6 @@ public class BalanceService {
         return new TopUpStatusResponse(operationId, transaction.getStatus());
     }
 
-    /**
-     * Devuelve la recarga solo si existe, es de tipo TOPUP y pertenece al usuario autenticado. Si no es suya
-     * se comporta igual que si no existiera (el llamador responde 404), para no revelar que el id existe.
-     */
     private Optional<TransactionEntity> findOwnedTopUp(UUID operationId, String firebaseUid) {
         if (firebaseUid == null) {
             return Optional.empty();

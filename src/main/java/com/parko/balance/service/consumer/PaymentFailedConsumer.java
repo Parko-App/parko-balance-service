@@ -29,11 +29,6 @@ public class PaymentFailedConsumer {
         this.entityManager = entityManager;
     }
 
-    /**
-     * Marca la operacion como FAILED, salvo que ya haya sido acreditada: un rechazo tardio (de un intento de pago
-     * anterior) no debe pisar una operacion COMPLETED, porque dejaria reabierta la posibilidad de acreditarla de
-     * nuevo. Usa el mismo bloqueo de fila que {@link PaymentConfirmedConsumer}.
-     */
     @RabbitListener(queues = RabbitConfig.PAYMENT_FAILED_QUEUE)
     @Transactional
     public void onPaymentFailed(PaymentFailedMessage message) {

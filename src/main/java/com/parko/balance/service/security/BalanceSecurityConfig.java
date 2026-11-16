@@ -37,7 +37,6 @@ public class BalanceSecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()
-                        // charge lo invoca access-service con su token de service account, nunca un usuario final
                         .requestMatchers(HttpMethod.POST, "/api/v1/balance/charge")
                                 .access(new AllowedClientAuthorizationManager(chargeAllowedClientId))
                         .anyRequest().authenticated())

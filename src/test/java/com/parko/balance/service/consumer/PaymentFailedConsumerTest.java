@@ -87,8 +87,6 @@ class PaymentFailedConsumerTest {
         verify(transactionRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 
-    // --- H8: un rechazo tardio no debe pisar una operacion ya acreditada ---
-
     @Test
     void onPaymentFailed_doesNotOverwriteACompletedTransaction() {
         UUID operationId = UUID.randomUUID();

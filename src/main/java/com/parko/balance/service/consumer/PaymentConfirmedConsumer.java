@@ -36,18 +36,6 @@ public class PaymentConfirmedConsumer {
         this.entityManager = entityManager;
     }
 
-    /**
-     * Acredita el saldo una sola vez por operacion. Los mensajes se entregan "al menos una vez" (Mercado Pago
-     * reenvia webhooks y RabbitMQ reentrega si el consumer falla o tarda), asi que el mismo mensaje puede llegar
-     * varias veces: este metodo es idempotente.
-     * <ul>
-     *   <li>Toda la operacion (saldo + transaccion) va en una unica transaccion: si algo falla, no queda nada a medias.</li>
-     *   <li>La transaccion se lee con bloqueo de fila ({@code SELECT ... FOR UPDATE}): serializa entregas concurrentes y
-     *       lee el estado ya confirmado, no uno viejo.</li>
-     *   <li>Si ya esta COMPLETED se ignora. Se acredita tambien desde FAILED a proposito: una misma preferencia
-     *       admite varios intentos de pago y uno rechazado puede ser seguido por uno aprobado.</li>
-     * </ul>
-     */
     @RabbitListener(queues = RabbitConfig.PAYMENT_CONFIRMED_QUEUE)
     @Transactional
     public void onPaymentConfirmed(PaymentConfirmedMessage message) {
