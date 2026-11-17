@@ -176,11 +176,13 @@ public class BalanceService {
             LocalDateTime to = from.plusMonths(1);
             int safePage = Math.max(page, 0);
             int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
-            entities = transactionRepository.findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
-                    firebaseUid, from, to, PageRequest.of(safePage, safeSize));
+            entities = transactionRepository.findVisibleHistoryByFirebaseUidAndPeriod(
+                    firebaseUid, from, to, TransactionType.TOPUP, TransactionStatus.COMPLETED,
+                    PageRequest.of(safePage, safeSize));
         } else {
             Pageable lastThree = PageRequest.of(0, 3);
-            entities = transactionRepository.findByBalanceAccount_User_FirebaseUidOrderByCreatedAtDesc(firebaseUid, lastThree);
+            entities = transactionRepository.findVisibleHistoryByFirebaseUid(
+                    firebaseUid, TransactionType.TOPUP, TransactionStatus.COMPLETED, lastThree);
         }
         return entities.map(TransactionResponseConverter::toResponse);
     }

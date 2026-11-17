@@ -464,8 +464,8 @@ class BalanceServiceTest {
         TransactionEntity entity = transactionWithTypeAndStatus(UUID.randomUUID(), TransactionType.TOPUP, TransactionStatus.COMPLETED);
         entity.setCreatedAt(LocalDateTime.of(2026, 9, 15, 10, 0));
         Page<TransactionEntity> page = new PageImpl<>(List.of(entity));
-        when(transactionRepository.findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
-                eq(firebaseUid), any(), any(), any(Pageable.class))).thenReturn(page);
+        when(transactionRepository.findVisibleHistoryByFirebaseUidAndPeriod(
+                eq(firebaseUid), any(), any(), eq(TransactionType.TOPUP), eq(TransactionStatus.COMPLETED), any(Pageable.class))).thenReturn(page);
 
         Page<TransactionResponse> result = balanceService.findTransactions(firebaseUid, 9, 2026, 0, 20);
 
@@ -475,8 +475,9 @@ class BalanceServiceTest {
         ArgumentCaptor<LocalDateTime> fromCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         ArgumentCaptor<LocalDateTime> toCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(transactionRepository).findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
-                eq(firebaseUid), fromCaptor.capture(), toCaptor.capture(), pageableCaptor.capture());
+        verify(transactionRepository).findVisibleHistoryByFirebaseUidAndPeriod(
+                eq(firebaseUid), fromCaptor.capture(), toCaptor.capture(),
+                eq(TransactionType.TOPUP), eq(TransactionStatus.COMPLETED), pageableCaptor.capture());
         assertThat(fromCaptor.getValue()).isEqualTo(LocalDateTime.of(2026, 9, 1, 0, 0));
         assertThat(toCaptor.getValue()).isEqualTo(LocalDateTime.of(2026, 10, 1, 0, 0));
         assertThat(pageableCaptor.getValue()).isEqualTo(PageRequest.of(0, 20));
@@ -485,43 +486,45 @@ class BalanceServiceTest {
     @Test
     void findTransactions_withoutMonthOrYear_returnsLastThreeIgnoringPageAndSize() {
         String firebaseUid = "firebase-uid-abc";
-        when(transactionRepository.findByBalanceAccount_User_FirebaseUidOrderByCreatedAtDesc(eq(firebaseUid), any(Pageable.class)))
+        when(transactionRepository.findVisibleHistoryByFirebaseUid(
+                eq(firebaseUid), eq(TransactionType.TOPUP), eq(TransactionStatus.COMPLETED), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
         balanceService.findTransactions(firebaseUid, null, null, 3, 50);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(transactionRepository).findByBalanceAccount_User_FirebaseUidOrderByCreatedAtDesc(eq(firebaseUid), pageableCaptor.capture());
+        verify(transactionRepository).findVisibleHistoryByFirebaseUid(
+                eq(firebaseUid), eq(TransactionType.TOPUP), eq(TransactionStatus.COMPLETED), pageableCaptor.capture());
         assertThat(pageableCaptor.getValue()).isEqualTo(PageRequest.of(0, 3));
         verify(transactionRepository, never())
-                .findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(any(), any(), any(), any());
+                .findVisibleHistoryByFirebaseUidAndPeriod(any(), any(), any(), any(), any(), any());
     }
 
     @Test
     void findTransactions_capsPageSizeAtMaximum() {
         String firebaseUid = "firebase-uid-abc";
-        when(transactionRepository.findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
-                eq(firebaseUid), any(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+        when(transactionRepository.findVisibleHistoryByFirebaseUidAndPeriod(
+                eq(firebaseUid), any(), any(), any(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
 
         balanceService.findTransactions(firebaseUid, 9, 2026, 0, 500000);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(transactionRepository).findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
-                eq(firebaseUid), any(), any(), pageableCaptor.capture());
+        verify(transactionRepository).findVisibleHistoryByFirebaseUidAndPeriod(
+                eq(firebaseUid), any(), any(), any(), any(), pageableCaptor.capture());
         assertThat(pageableCaptor.getValue()).isEqualTo(PageRequest.of(0, 100));
     }
 
     @Test
     void findTransactions_normalizesNonPositiveSizeAndNegativePage() {
         String firebaseUid = "firebase-uid-abc";
-        when(transactionRepository.findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
-                eq(firebaseUid), any(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+        when(transactionRepository.findVisibleHistoryByFirebaseUidAndPeriod(
+                eq(firebaseUid), any(), any(), any(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
 
         balanceService.findTransactions(firebaseUid, 9, 2026, -5, 0);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(transactionRepository).findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(
-                eq(firebaseUid), any(), any(), pageableCaptor.capture());
+        verify(transactionRepository).findVisibleHistoryByFirebaseUidAndPeriod(
+                eq(firebaseUid), any(), any(), any(), any(), pageableCaptor.capture());
         assertThat(pageableCaptor.getValue()).isEqualTo(PageRequest.of(0, 1));
     }
 
@@ -552,13 +555,13 @@ class BalanceServiceTest {
     @Test
     void findTransactions_withOnlyMonth_treatsAsMissingFilter() {
         String firebaseUid = "firebase-uid-abc";
-        when(transactionRepository.findByBalanceAccount_User_FirebaseUidOrderByCreatedAtDesc(eq(firebaseUid), any(Pageable.class)))
+        when(transactionRepository.findVisibleHistoryByFirebaseUid(eq(firebaseUid), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
         balanceService.findTransactions(firebaseUid, 9, null, 0, 20);
 
-        verify(transactionRepository).findByBalanceAccount_User_FirebaseUidOrderByCreatedAtDesc(eq(firebaseUid), any(Pageable.class));
+        verify(transactionRepository).findVisibleHistoryByFirebaseUid(eq(firebaseUid), any(), any(), any(Pageable.class));
         verify(transactionRepository, never())
-                .findByBalanceAccount_User_FirebaseUidAndCreatedAtBetweenOrderByCreatedAtDesc(any(), any(), any(), any());
+                .findVisibleHistoryByFirebaseUidAndPeriod(any(), any(), any(), any(), any(), any());
     }
 }
