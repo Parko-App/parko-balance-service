@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -189,6 +190,95 @@ class PaymentConfirmedConsumerTest {
 
         verify(entityManager).find(TransactionEntity.class, operationId, LockModeType.PESSIMISTIC_WRITE);
         verify(transactionRepository, never()).findById(any());
+    }
+
+    private TransactionEntity pendingCharge(UUID balanceAccountId, BigDecimal amount) {
+        TransactionEntity charge = transaction(UUID.randomUUID(), balanceAccountId, amount, TransactionStatus.PENDING);
+        charge.setType(TransactionType.CHARGE);
+        charge.setPaymentProvider("INTERNAL_BALANCE");
+        return charge;
+    }
+
+    private void pendingChargesExist(UUID balanceAccountId, TransactionEntity... charges) {
+        when(transactionRepository.findByBalanceAccount_IdAndTypeAndStatusOrderByCreatedAtAsc(
+                balanceAccountId, TransactionType.CHARGE, TransactionStatus.PENDING)).thenReturn(List.of(charges));
+    }
+
+    @Test
+    void onPaymentConfirmed_settlesPendingCharge_withTheCreditedAmount() {
+        UUID userId = UUID.randomUUID();
+        UUID balanceAccountId = UUID.randomUUID();
+        BalanceAccountEntity account = accountWithId(balanceAccountId);
+        account.setAmount(BigDecimal.valueOf(-500));
+        when(balanceAccountRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        UUID operationId = UUID.randomUUID();
+        transactionExists(operationId, pendingTransaction(operationId, balanceAccountId, BigDecimal.valueOf(2000)));
+        TransactionEntity charge = pendingCharge(balanceAccountId, BigDecimal.valueOf(1000));
+        pendingChargesExist(balanceAccountId, charge);
+
+        consumer.onPaymentConfirmed(new PaymentConfirmedMessage(operationId, userId, BigDecimal.valueOf(2000)));
+
+        assertThat(account.getAmount()).isEqualByComparingTo(BigDecimal.valueOf(500));
+        assertThat(charge.getStatus()).isEqualTo(TransactionStatus.COMPLETED);
+        verify(transactionRepository).save(charge);
+        verify(balanceAccountRepository).save(account);
+    }
+
+    @Test
+    void onPaymentConfirmed_settlesPendingCharge_evenIfBalanceEndsNegative() {
+        UUID userId = UUID.randomUUID();
+        UUID balanceAccountId = UUID.randomUUID();
+        BalanceAccountEntity account = accountWithId(balanceAccountId);
+        account.setAmount(BigDecimal.valueOf(-500));
+        when(balanceAccountRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        UUID operationId = UUID.randomUUID();
+        transactionExists(operationId, pendingTransaction(operationId, balanceAccountId, BigDecimal.valueOf(600)));
+        TransactionEntity charge = pendingCharge(balanceAccountId, BigDecimal.valueOf(1000));
+        pendingChargesExist(balanceAccountId, charge);
+
+        consumer.onPaymentConfirmed(new PaymentConfirmedMessage(operationId, userId, BigDecimal.valueOf(600)));
+
+        assertThat(account.getAmount()).isEqualByComparingTo(BigDecimal.valueOf(-900));
+        assertThat(charge.getStatus()).isEqualTo(TransactionStatus.COMPLETED);
+    }
+
+    @Test
+    void onPaymentConfirmed_leavesPendingCharge_whenBalanceIsStillNegativeAfterCredit() {
+        UUID userId = UUID.randomUUID();
+        UUID balanceAccountId = UUID.randomUUID();
+        BalanceAccountEntity account = accountWithId(balanceAccountId);
+        account.setAmount(BigDecimal.valueOf(-500));
+        when(balanceAccountRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        UUID operationId = UUID.randomUUID();
+        transactionExists(operationId, pendingTransaction(operationId, balanceAccountId, BigDecimal.valueOf(200)));
+        TransactionEntity charge = pendingCharge(balanceAccountId, BigDecimal.valueOf(1000));
+        pendingChargesExist(balanceAccountId, charge);
+
+        consumer.onPaymentConfirmed(new PaymentConfirmedMessage(operationId, userId, BigDecimal.valueOf(200)));
+
+        assertThat(account.getAmount()).isEqualByComparingTo(BigDecimal.valueOf(-300));
+        assertThat(charge.getStatus()).isEqualTo(TransactionStatus.PENDING);
+        verify(transactionRepository, never()).save(charge);
+    }
+
+    @Test
+    void onPaymentConfirmed_settlesPendingChargesOldestFirst_untilBalanceGoesNegative() {
+        UUID userId = UUID.randomUUID();
+        UUID balanceAccountId = UUID.randomUUID();
+        BalanceAccountEntity account = accountWithId(balanceAccountId);
+        account.setAmount(BigDecimal.valueOf(-500));
+        when(balanceAccountRepository.findByUserId(userId)).thenReturn(Optional.of(account));
+        UUID operationId = UUID.randomUUID();
+        transactionExists(operationId, pendingTransaction(operationId, balanceAccountId, BigDecimal.valueOf(1000)));
+        TransactionEntity older = pendingCharge(balanceAccountId, BigDecimal.valueOf(1000));
+        TransactionEntity newer = pendingCharge(balanceAccountId, BigDecimal.valueOf(1000));
+        pendingChargesExist(balanceAccountId, older, newer);
+
+        consumer.onPaymentConfirmed(new PaymentConfirmedMessage(operationId, userId, BigDecimal.valueOf(1000)));
+
+        assertThat(account.getAmount()).isEqualByComparingTo(BigDecimal.valueOf(-500));
+        assertThat(older.getStatus()).isEqualTo(TransactionStatus.COMPLETED);
+        assertThat(newer.getStatus()).isEqualTo(TransactionStatus.PENDING);
     }
 
     @Test

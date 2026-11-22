@@ -81,4 +81,27 @@ class TransactionResponseConverterTest {
         assertThat(response.id()).isEqualTo(entity.getId().toString());
         assertThat(response.amount()).isEqualByComparingTo(BigDecimal.valueOf(1200));
     }
+
+    @Test
+    void toResponse_mapsCompletedStatusToCompletado() {
+        TransactionEntity entity = entityWithTypeAndCreatedAt(TransactionType.CHARGE, LocalDateTime.of(2026, 1, 1, 9, 0));
+
+        assertThat(TransactionResponseConverter.toResponse(entity).status()).isEqualTo("completado");
+    }
+
+    @Test
+    void toResponse_mapsPendingStatusToPendiente() {
+        TransactionEntity entity = entityWithTypeAndCreatedAt(TransactionType.CHARGE, LocalDateTime.of(2026, 1, 1, 9, 0));
+        entity.setStatus(TransactionStatus.PENDING);
+
+        assertThat(TransactionResponseConverter.toResponse(entity).status()).isEqualTo("pendiente");
+    }
+
+    @Test
+    void toResponse_mapsFailedStatusToFallido() {
+        TransactionEntity entity = entityWithTypeAndCreatedAt(TransactionType.TOPUP, LocalDateTime.of(2026, 1, 1, 9, 0));
+        entity.setStatus(TransactionStatus.FAILED);
+
+        assertThat(TransactionResponseConverter.toResponse(entity).status()).isEqualTo("fallido");
+    }
 }
