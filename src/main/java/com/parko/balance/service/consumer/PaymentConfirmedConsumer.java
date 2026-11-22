@@ -3,6 +3,7 @@ package com.parko.balance.service.consumer;
 import com.parko.balance.service.config.RabbitConfig;
 import com.parko.balance.service.event.PaymentConfirmedMessage;
 import com.parko.domain.lib.model.TransactionStatus;
+import com.parko.domain.lib.model.TransactionType;
 import com.parko.persistence.core.model.entity.BalanceAccountEntity;
 import com.parko.persistence.core.model.entity.TransactionEntity;
 import com.parko.persistence.core.repository.BalanceAccountRepository;
@@ -15,7 +16,9 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
@@ -61,6 +64,7 @@ public class PaymentConfirmedConsumer {
 
         BalanceAccountEntity balanceAccount = account.get();
         balanceAccount.setAmount(balanceAccount.getAmount().add(message.amount()));
+        settlePendingCharges(balanceAccount);
         balanceAccount.setUpdatedAt(LocalDateTime.now());
         balanceAccountRepository.save(balanceAccount);
 
@@ -70,5 +74,28 @@ public class PaymentConfirmedConsumer {
 
         log.info("Saldo acreditado para operationId={}, userId={}, amount={}",
                 message.operationId(), message.userId(), message.amount());
+    }
+
+    /**
+     * Cobra los estacionamientos que quedaron PENDING por haber entrado con saldo negativo,
+     * del más viejo al más nuevo, con la misma regla que BalanceService.charge: se cobra
+     * mientras el saldo no sea negativo (puede quedar negativo una sola vez).
+     */
+    private void settlePendingCharges(BalanceAccountEntity balanceAccount) {
+        List<TransactionEntity> pendingCharges = transactionRepository
+                .findByBalanceAccount_IdAndTypeAndStatusOrderByCreatedAtAsc(
+                        balanceAccount.getId(), TransactionType.CHARGE, TransactionStatus.PENDING);
+
+        for (TransactionEntity charge : pendingCharges) {
+            if (balanceAccount.getAmount().compareTo(BigDecimal.ZERO) < 0) {
+                break;
+            }
+            balanceAccount.setAmount(balanceAccount.getAmount().subtract(charge.getAmount()));
+            charge.setStatus(TransactionStatus.COMPLETED);
+            charge.setUpdatedAt(LocalDateTime.now());
+            transactionRepository.save(charge);
+            log.info("Estacionamiento pendiente saldado con la recarga: transactionId={}, amount={}",
+                    charge.getId(), charge.getAmount());
+        }
     }
 }

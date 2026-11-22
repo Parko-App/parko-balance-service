@@ -8,6 +8,8 @@ public record TransactionResponse(
         BigDecimal amount,
         String date,
         String time,
-        String type
+        String type,
+        String status,
+        String paymentProvider
 ) {
 }

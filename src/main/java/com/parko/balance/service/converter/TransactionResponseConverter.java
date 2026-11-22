@@ -1,6 +1,7 @@
 package com.parko.balance.service.converter;
 
 import com.parko.balance.service.dto.response.TransactionResponse;
+import com.parko.domain.lib.model.TransactionStatus;
 import com.parko.domain.lib.model.TransactionType;
 import com.parko.persistence.core.model.entity.TransactionEntity;
 
@@ -22,8 +23,18 @@ public final class TransactionResponseConverter {
                 entity.getAmount(),
                 entity.getCreatedAt().format(DATE_FORMATTER),
                 entity.getCreatedAt().format(TIME_FORMATTER),
-                type(entity.getType())
+                type(entity.getType()),
+                status(entity.getStatus()),
+                entity.getPaymentProvider()
         );
+    }
+
+    private static String status(TransactionStatus status) {
+        return switch (status) {
+            case COMPLETED -> "completado";
+            case PENDING -> "pendiente";
+            case FAILED -> "fallido";
+        };
     }
 
     private static String title(TransactionType type) {

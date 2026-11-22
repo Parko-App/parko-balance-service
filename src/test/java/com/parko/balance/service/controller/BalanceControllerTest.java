@@ -164,14 +164,16 @@ class BalanceControllerTest {
     void getTransactions_returnsOk_withPageContent() throws Exception {
         Authentication authentication = new UsernamePasswordAuthenticationToken("firebase-uid-123", null);
         TransactionResponse item = new TransactionResponse(
-                UUID.randomUUID().toString(), "Carga de saldo", BigDecimal.valueOf(1200), "6/9/2026", "02:05 PM", "carga");
+                UUID.randomUUID().toString(), "Carga de saldo", BigDecimal.valueOf(1200), "6/9/2026", "02:05 PM", "carga", "completado", "MERCADO_PAGO");
         Page<TransactionResponse> page = new PageImpl<>(List.of(item));
         when(balanceService.findTransactions(eq("firebase-uid-123"), any(), any(), anyInt(), anyInt())).thenReturn(page);
 
         mockMvc.perform(get("/api/v1/balance/transactions").principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].title").value("Carga de saldo"))
-                .andExpect(jsonPath("$.content[0].type").value("carga"));
+                .andExpect(jsonPath("$.content[0].type").value("carga"))
+                .andExpect(jsonPath("$.content[0].status").value("completado"))
+                .andExpect(jsonPath("$.content[0].paymentProvider").value("MERCADO_PAGO"));
     }
 
     @Test
