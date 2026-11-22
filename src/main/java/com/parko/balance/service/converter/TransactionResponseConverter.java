@@ -24,7 +24,8 @@ public final class TransactionResponseConverter {
                 entity.getCreatedAt().format(DATE_FORMATTER),
                 entity.getCreatedAt().format(TIME_FORMATTER),
                 type(entity.getType()),
-                status(entity.getStatus())
+                status(entity.getStatus()),
+                entity.getPaymentProvider()
         );
     }
 

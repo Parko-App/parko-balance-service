@@ -9,6 +9,7 @@ public record TransactionResponse(
         String date,
         String time,
         String type,
-        String status
+        String status,
+        String paymentProvider
 ) {
 }

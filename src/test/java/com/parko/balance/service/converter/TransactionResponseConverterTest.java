@@ -104,4 +104,12 @@ class TransactionResponseConverterTest {
 
         assertThat(TransactionResponseConverter.toResponse(entity).status()).isEqualTo("fallido");
     }
+
+    @Test
+    void toResponse_copiesPaymentProvider() {
+        TransactionEntity entity = entityWithTypeAndCreatedAt(TransactionType.TOPUP, LocalDateTime.of(2026, 1, 1, 9, 0));
+        entity.setPaymentProvider("MERCADO_PAGO");
+
+        assertThat(TransactionResponseConverter.toResponse(entity).paymentProvider()).isEqualTo("MERCADO_PAGO");
+    }
 }
